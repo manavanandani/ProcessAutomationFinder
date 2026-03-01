@@ -1,0 +1,6 @@
+pandas
+scikit-learn
+anthropic
+pydantic
+python-dotenv
+pytest

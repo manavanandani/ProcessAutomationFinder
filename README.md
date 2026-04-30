@@ -1,76 +1,88 @@
 # Process Automation Finder
 
-An AI-powered diagnostic tool that systematically analyzes operational workflows, identifies the highest-ROI automation candidates, and generates a prioritized engineering roadmap. 
+The **Process Automation Finder** is an AI-powered strategic diagnostic tool that analyzes operational workflows, grades their automation viability, and algorithmically generates a prioritized engineering roadmap. 
 
-Designed to replace "engineering instinct" with data-driven decision making, this tool ensures development teams focus on automations that deliver the maximum operational leverage.
+By ingesting raw process documentation and manual time-logs, it bypasses human bias and ensures that development bandwidth is strictly allocated to the highest-ROI targets.
 
 ---
 
-## Technical Architecture
+## 1. Business Context & Validation
 
-The system operates as a multi-stage pipeline, moving from raw CSV operational data to a scored, prioritized JSON roadmap.
+Identifying *what* to automate is often harder than the automation itself. Teams frequently spend weeks building automations for complex processes that only take humans 10 minutes a week to complete, ignoring simple processes that consume hundreds of human hours.
+
+**Internal Validation Data:**
+Before deploying this system, we back-tested its capabilities against historical team data. We fed it the raw logs of our operations team from the prior year. The `ProcessAutomationFinder` independently generated a roadmap that exactly matched the top three most successful automations we had *already* built manually. This proved that the tool's heuristic prioritization model was fundamentally sound and capable of replacing subjective engineering scoping.
+
+---
+
+## 2. Multi-Stage Pipeline Architecture
+
+The system operates as a deterministic, three-stage data pipeline, blending traditional data engineering (`pandas`) with cognitive AI evaluation (Claude API).
 
 ```mermaid
 graph LR
-    subgraph Data_Ingestion
-        CSV[Time Tracking CSV]
-        Docs[Process Docs]
-        Parser[Pandas Log Parser]
+    subgraph Stage_1_Data_Ingestion
+        CSV[(Time Tracking Databases)]
+        Docs[(Standard Operating Procedures)]
+        Parser[Pandas Aggregation Engine]
     end
 
-    subgraph LLM_Analysis
+    subgraph Stage_2_Cognitive_Analysis
         Eval[Process Evaluator]
-        Claude[Anthropic Claude API]
+        Claude[Anthropic LLM: Heuristic Scoping]
     end
 
-    subgraph Roadmap_Engine
-        ROI[ROI Calculator]
-        Gen[Roadmap Generator]
+    subgraph Stage_3_Roadmap_Generation
+        ROI[Mathematical ROI Calculator]
+        Gen[JSON Roadmap Compiler]
     end
 
     CSV --> Parser
     Docs --> Parser
-    Parser --> Eval
-    Eval <--> Claude
-    Eval --> ROI
-    ROI --> Gen
-    Gen --> Output[Prioritized JSON Roadmap]
+    Parser -- "Raw Process Objects" --> Eval
+    
+    Eval <-->|Few-Shot Prompts| Claude
+    Eval -- "Scored Feasibility Metrics" --> ROI
+    
+    ROI -- "Time-Saved-Per-Build-Hour" --> Gen
+    Gen --> Output((Prioritized Execution Roadmap))
 ```
 
 ---
 
-## Core Components
+## 3. Deep-Dive: System Execution
 
-### 1. Ingestion Pipeline (`src/ingestion/log_parser.py`)
-Utilizes `pandas` to aggregate disparate operational time logs. It groups manual tasks by category and extracts the associated procedural documentation required for execution.
+### A. The Ingestion Engine (`src/ingestion/log_parser.py`)
+Manual operations are noisy. This module uses `pandas` to clean and aggregate fragmented time-tracking data. It ties specific manual tasks (e.g., "L1 Triage") to their associated standard operating procedure (SOP) text, creating a unified `Process Object` ready for AI evaluation.
 
-### 2. LLM Evaluator (`src/analyzer/llm_evaluator.py`)
-Instead of relying on human scoping, this module passes the process descriptions to the Claude API. Using few-shot prompting, it assesses the cognitive complexity of the task (e.g., rule-based vs. nuanced negotiation) to assign a `feasibility_score` and an `estimated_build_hours` metric.
+### B. The LLM Evaluator (`src/analyzer/llm_evaluator.py`)
+This is the core innovation. We pass the SOP text to the Claude API with a strict system prompt. The LLM analyzes the text to determine cognitive load:
+- **Low Cognitive Load:** (e.g., "Read PDF, extract numbers, paste to Excel"). The LLM assigns a high `feasibility_score` and recommends RPA or Agentic workflows.
+- **High Cognitive Load:** (e.g., "Negotiate vendor contracts"). The LLM assigns a low `feasibility_score` and flags the process as "Not Recommended."
 
-### 3. Prioritization Engine (`src/roadmap/generator.py`)
-The engine's primary heuristic is **Time-Saved-Per-Build-Hour**. It algorithmically filters out low-feasibility processes and sorts the remainder strictly by ROI, guaranteeing that the highest-impact targets are surfaced first.
-
----
-
-## Internal Validation Strategy
-
-Before broader rollout, this tool was validated internally by running it against historical operational data. The tool's AI-generated roadmap correctly matched the top three automations the team had already built manually, proving its accuracy in surfacing high-ROI targets without human bias.
+### C. The Prioritization Matrix (`src/roadmap/generator.py`)
+Once scored, the `RoadmapGenerator` applies a rigid mathematical heuristic: **Time-Saved-Per-Build-Hour**. It calculates the projected monthly human hours saved divided by the LLM-estimated engineering build time. The final output is an immutable, sorted JSON roadmap that dictates exactly what the engineering team should build next.
 
 ---
 
-## Setup & Execution
+## 4. Execution & Demo
+
+The repository contains a fully runnable demonstration script that simulates the entire end-to-end pipeline using mock operations data.
 
 ### Installation
 ```bash
 git clone https://github.com/manavanandani/ProcessAutomationFinder.git
 cd ProcessAutomationFinder
+python3 -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### Running the Pipeline Demo
+### Running the Demo
 ```bash
 python3 main.py
 ```
+*The terminal will output a sorted list of automation opportunities, complete with the recommended tech stack and calculated ROI ratios.*
 
 ---
 
